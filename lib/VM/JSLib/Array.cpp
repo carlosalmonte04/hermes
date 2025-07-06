@@ -9,7 +9,8 @@
 /// \file
 /// ES5.1 15.4 Initialize the Array constructor.
 //===----------------------------------------------------------------------===//
-
+#include <vector>
+#include <iostream>
 #include "JSLibInternal.h"
 
 #include "hermes/ADT/SafeInt.h"
@@ -91,6 +92,13 @@ Handle<JSObject> createArrayConstructor(Runtime &runtime) {
       Predefined::getSymbolID(Predefined::forEach),
       nullptr,
       arrayPrototypeForEach,
+      1);
+  defineMethod(
+      runtime,
+      arrayPrototype,
+      Predefined::getSymbolID(Predefined::uniq),
+      nullptr,
+      arrayPrototypeUniq,
       1);
   defineMethod(
       runtime,
@@ -1494,6 +1502,95 @@ arrayPrototypeSort(void *, Runtime &runtime, NativeArgs args) {
     return ExecutionStatus::EXCEPTION;
 
   return O.getHermesValue();
+}
+
+inline CallResult<HermesValue>
+arrayPrototypeUniq(void *, Runtime &runtime, NativeArgs args) {
+  GCScope gcScope(runtime);
+  auto objRes = toObject(runtime, args.getThisHandle());
+
+  auto O = runtime.makeHandle<JSObject>(objRes.getValue());
+
+  auto propRes = JSObject::getNamed_RJS(
+      O, runtime, Predefined::getSymbolID(Predefined::length));
+
+  auto intRes = toLengthU64(runtime, runtime.makeHandle(std::move(*propRes)));
+
+  uint64_t len = *intRes;
+
+  auto callbackFn = args.dyncastArg<Callable>(0);
+  if (!callbackFn) {
+    return runtime.raiseTypeError(
+        "Array.prototype.uniq() requires a callable argument");
+  }
+
+  // Index to execute the callback on.
+  MutableHandle<> k{runtime, HermesValue::encodeTrustedNumberValue(len)};
+
+  MutableHandle<JSObject> descObjHandle{runtime};
+  MutableHandle<SymbolID> tmpPropNameStorage{runtime};
+  CallResult<Handle<JSArray>> arrRes = JSArray::create(runtime, len, 0);
+  auto A = *arrRes;
+
+  // Loop through and execute the callback on all existing values.
+  // TODO: Implement a fast path for actual arrays.
+  std::vector<HermesValue> v = { };
+  // Index to copy to in the new array.
+  uint32_t to = 0;
+  auto marker = gcScope.createMarker();
+  while (k->getDouble() >= 0) {
+    gcScope.flushToMarker(marker);
+    MutableHandle<> j{runtime, HermesValue::encodeTrustedNumberValue(k->getDouble() - 1)};
+    ComputedPropertyDescriptor desc;
+    JSObject::getComputedPrimitiveDescriptor(
+        O, runtime, k, descObjHandle, tmpPropNameStorage, desc);
+    CallResult<PseudoHandle<>> propRes = JSObject::getComputedPropertyValue_RJS(
+        O, runtime, descObjHandle, tmpPropNameStorage, desc, k);
+    auto kValue = std::move(*propRes);
+    bool isRepeated = false;
+    auto marker2 = gcScope.createMarker();
+    while(j->getDouble() >= 0) {
+      gcScope.flushToMarker(marker2);
+      ComputedPropertyDescriptor desc2;
+      JSObject::getComputedPrimitiveDescriptor(
+          O, runtime, j, descObjHandle, tmpPropNameStorage, desc2);      
+      CallResult<PseudoHandle<>> propRes2 = JSObject::getComputedPropertyValue_RJS(
+          O, runtime, descObjHandle, tmpPropNameStorage, desc2, j);
+      auto jValue = std::move(*propRes2);
+      if(kValue.get().getRaw() == jValue.get().getRaw()) {
+        isRepeated = true;
+      }
+      j = HermesValue::encodeTrustedNumberValue(j->getDouble() - 1);
+    }
+    if(
+      !isRepeated && !kValue.get().isUndefined() && !kValue.get().isNull() && !kValue.get().isEmpty()
+      ) {
+      JSArray::setElementAt(A, runtime, to, runtime.makeHandle(kValue.get()));
+      ++to;
+    }
+    k = HermesValue::encodeTrustedNumberValue(k->getDouble() - 1);
+  }
+  MutableHandle<> i{runtime, HermesValue::encodeTrustedNumberValue(len - 1)};
+  uint32_t finalLength = 0;
+
+  // reverse array of unique elements and only push valid values
+  while(i->getDouble() >= 0) {
+    auto elem = A.get()->at(runtime, i->getDouble());
+    if(!elem.isNull() && !elem.isUndefined() && !elem.isEmpty()) {
+      v.push_back(elem.toHV(runtime));
+      finalLength++;
+    }
+    i = HermesValue::encodeTrustedNumberValue(i->getDouble() - 1);
+  }
+  // turn vector into JSArray to return hermesvalue
+  CallResult<Handle<JSArray>> arrResCopy = JSArray::create(runtime, finalLength, finalLength);
+  auto ACopy = *arrResCopy;
+  uint32_t l = 0;
+  for(HermesValue elem : v) {
+    JSArray::setElementAt(ACopy, runtime, l, runtime.makeHandle(elem));
+    ++l;
+  }
+  return ACopy.getHermesValue();
 }
 
 inline CallResult<HermesValue>

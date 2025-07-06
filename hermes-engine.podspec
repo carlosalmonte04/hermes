@@ -26,7 +26,7 @@ Pod::Spec.new do |spec|
   spec.source      = ENV['hermes-artifact-url'] ? { http: ENV['hermes-artifact-url'] } : { git: "https://github.com/facebook/hermes.git", tag: "v#{spec.version}" }
   spec.platforms   = { :osx => "10.13", :ios => "12.0", :visionos => "1.0", :tvos => "12.0" }
 
-  spec.preserve_paths      = ["destroot/bin/*"].concat(HermesHelper::BUILD_TYPE == :debug ? ["**/*.{h,c,cpp}"] : [])
+  spec.preserve_paths      = ["destroot/bin/*"].concat(["**/*.{h,c,cpp}"])
   spec.source_files        = "destroot/include/**/*.h"
   spec.header_mappings_dir = "destroot/include"
 

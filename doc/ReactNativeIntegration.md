@@ -27,6 +27,7 @@ On Android, once you set the `REACT_NATIVE_OVERRIDE_HERMES_DIR` environment vari
 
 ### Instructions for iOS
 
+#### Option 1 - local directory:
 On iOS, once you set the `REACT_NATIVE_OVERRIDE_HERMES_DIR` environment variable, make sure you also:
 
 1. Disable React Native's Default Hermes Pod: Ensure that the `:hermes_enabled` flag is set to `false` in `ios/Podfile`.
@@ -42,6 +43,27 @@ use_react_native!(
 ```bash
 BUILD_FROM_SOURCE=true bundle exec pod install
 ```
+3. Re-run the iOS app with the `yarn ios` command.
+
+#### Option 2 - fork:
+
+On iOS, once you set the `RCT_HERMES_OVERRIDE_GITHUB_URL` environment variable, make sure you also:
+
+1. Enable React Native's Default Hermes Pod: Remove the `:hermes_enabled` flag in `ios/Podfile` if it is present.
+
+```ruby
+use_react_native!(
+  :path => config[:reactNativePath],
+  # :hermes_enabled => false, # remove this line
+  # ... other configurations
+)
+```
+
+2. Enable a build from source by installing the pods as follows:
+```bash
+BUILD_FROM_SOURCE=true bundle exec pod install
+```
+
 3. Re-run the iOS app with the `yarn ios` command.
 
 ## Reporting native crashes
